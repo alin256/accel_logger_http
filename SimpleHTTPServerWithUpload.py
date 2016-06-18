@@ -20,6 +20,7 @@ import urllib
 import cgi
 import shutil
 import mimetypes
+import json
 import re
 try:
     from cStringIO import StringIO
@@ -70,7 +71,7 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             f.write("<strong>Failed:</strong>")
         f.write(info)
-        f.write("<br><a href=\"%s\">back</a>" % self.headers['referer'])
+        f.write("<br><a href=\"%s\">back</a>" % self.headers.getheader('user-agent'))
         f.write("<hr><small>Powerd By: bones7456, check new version at ")
         f.write("<a href=\"http://li2z.cn/?s=SimpleHTTPServerWithUpload\">")
         f.write("here</a>.</small></body>\n</html>\n")
@@ -83,46 +84,46 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if f:
             self.copyfile(f, self.wfile)
             f.close()
-        
+
+    _filename = "stream.csv"
+    _int_shift = 1 << 15
+
+    def data_to_int(self, d0, d1):
+        x = (int(d1) << 8) + int(d0)
+        if x & self._int_shift > 0:
+            x = (~x + 1) % self._int_shift
+        return -x
+
+
     def deal_post_data(self):
-        boundary = self.headers.plisttext.split("=")[1]
-        remainbytes = int(self.headers['content-length'])
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        if not boundary in line:
-            return (False, "Content NOT begin with boundary")
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        fn = re.findall(r'Content-Disposition.*name="file"; filename="(.*)"', line)
-        if not fn:
-            return (False, "Can't find out file name...")
-        path = self.translate_path(self.path)
-        fn = os.path.join(path, fn[0])
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        try:
-            out = open(fn, 'wb')
-        except IOError:
-            return (False, "Can't create file to write, do you have permission to write?")
-                
-        preline = self.rfile.readline()
-        remainbytes -= len(preline)
-        while remainbytes > 0:
-            line = self.rfile.readline()
-            remainbytes -= len(line)
-            if boundary in line:
-                preline = preline[0:-1]
-                if preline.endswith('\r'):
-                    preline = preline[0:-1]
-                out.write(preline)
-                out.close()
-                return (True, "File '%s' upload success!" % fn)
-            else:
-                out.write(preline)
-                preline = line
-        return (False, "Unexpect Ends of data.")
+        content_len = int(self.headers.getheader('content-length', 0))
+        post_body_str = str(self.rfile.read(content_len))
+        post_body = json.loads(post_body_str)
+        entry_len = 6
+
+        with open(self._filename, "a") as out_file:
+            for i in range(len(post_body["4"])/entry_len):
+                out_file.write(str(int(post_body["20"])+40*i))
+                out_file.write(',')
+                x = self.data_to_int(post_body["4"][i*entry_len + 0], post_body["4"][i*entry_len + 1])
+                y = self.data_to_int(post_body["4"][i*entry_len + 2], post_body["4"][i*entry_len + 3])
+                z = self.data_to_int(post_body["4"][i*entry_len + 4], post_body["4"][i*entry_len + 5])
+
+                #out_file.write(str(post_body["10"]))
+                #out_file.write(',')
+                out_file.write(str(x))
+                out_file.write(',')
+                out_file.write(str(y))
+                out_file.write(',')
+                out_file.write(str(z))
+                out_file.write('\n')
+
+
+
+            out_file.close();
+
+        return (True, "File '%s' append success!" % self._filename)
+        #return (False, "Unexpect Ends of data.")
 
     def send_head(self):
         """Common code for GET and HEAD commands.
