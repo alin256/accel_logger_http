@@ -91,8 +91,8 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def data_to_int(self, d0, d1):
         x = (int(d1) << 8) + int(d0)
         if x & self._int_shift > 0:
-            x = (~x + 1) % self._int_shift
-        return -x
+            x = -((~x + 1) % self._int_shift)
+        return x
 
 
     def deal_post_data(self):
